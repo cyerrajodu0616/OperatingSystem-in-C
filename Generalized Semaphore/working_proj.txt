@@ -1,0 +1,131 @@
+#include<stdio.h>
+#include<pthread.h>
+#include<semaphore.h>
+
+int resource[2^64];
+// Variables for generalized semaphores
+sem_t full_semaphore,empty_semaphore;
+//variables for Mutex locks
+pthread_mutex_t var_mutex;
+// Variables for produce and consumer threads
+pthread_t producer_thread,consumer_thread;
+float total_items;
+pid_t pid;
+int test_slots;
+
+
+
+// Below procedure will be called when producer thread is created
+void *producer_method(void *x){
+int i,ins ,offset_index = 0,value;
+for(int i=0; i < total_items; i++){
+	// This make thread to sleep for random time
+    sleep(5);
+	// This will generate random number which will be used to produce
+    ins = rand();
+	// This will check whether there are any resources available for producer thread
+	sem_getvalue(&empty_semaphore,&value);
+	if ( value == 0)
+	{
+	    printf(" Producer Thread for thread id :%d is blocked due to no available resources",pthread_self());
+	}
+	// This will check whether there is empty resource, If there are no available resource then thread will wait.
+    sem_wait(&empty_semaphore);
+	// This will apply exclusive lock on resource
+    pthread_mutex_lock(&var_mutex);
+	// This will add random number generated into available resource
+    resource[offset_index]=ins;
+    pid = getpid();
+    printf("\nItem produced for pid : %d and thread id: %d is %d at index %d\n",pid,pthread_self(),ins,offset_index );
+    offset_index = (offset_index+1) % test_slots;
+    // This will release the lock acquired previously
+	pthread_mutex_unlock(&var_mutex);
+	// This will increment the Full Semaphore by 1 and signal to Consumer thread that there is resource available to consume
+    sem_post(&full_semaphore);
+
+  }
+  // This will check if required number of items are produced or not, if produced then producer thread will be terminated.
+  if(i = total_items){
+    pthread_exit(NULL);
+  }
+}
+
+// This procedure will be called when Consumer thread is created
+void *consumer_method(void *x){
+int i,ins ,read_offset_index = 0,value;
+for(int i=0; i < total_items; i++){
+	
+	// This will check whether there are any resources available for producer thread
+	sem_getvalue(&full_semaphore,&value);
+	if ( value == 0)
+	{
+	    printf(" Consumer Thread for thread id :%d is blocked due to no available resources",pthread_self());
+	}
+// This will check if there are any available resource for consume, if there are no resources then this thread will be blocked until resources are // available
+    sem_wait(&full_semaphore);
+	// This will apply exclusive lock on resource
+    pthread_mutex_lock(&var_mutex);
+    // This will read data from locked resource
+    ins = resource[read_offset_index];
+    pid = getpid();
+    printf("\nItem consumed for pid: %d and thread id: %d is %d at index of resource %d\n ",pid,pthread_self(),ins,read_offset_index );
+    read_offset_index = (read_offset_index+1) % test_slots;
+    // This will release the lock acquired previously
+    pthread_mutex_unlock(&var_mutex);
+	// This will increment the empty Semaphore by 1 and signal to Producer thread that there is resource available to produce
+    sem_post(&empty_semaphore);
+   	// This make thread to sleep for random time
+	sleep(20);
+  }
+    // This will check if required number of items are produced or not, if produced then producer thread will be terminated.
+  if(i = total_items){
+    pthread_exit(NULL);
+  }
+}
+
+void main (){
+  int test_items;
+  float number_of_slots;
+ 
+  printf("\n input the counting semaphores required in buffer");
+  scanf("%f",&number_of_slots);
+  
+  // This will verify if provided value is +ve Integer  
+  test_slots = number_of_slots;
+  if(test_slots != number_of_slots || number_of_slots < 2 ){
+      printf("\n pls enter a non decimal/ integer semaphore value greater than 1 as we are using generalized semaphore \n");
+      exit(1);
+  }
+ 
+  printf("\n Enter number of items to be produced");
+  scanf("%f",&total_items);
+ 
+ // This will verify if provided value is +ve Integer
+  test_items = total_items;
+  if(test_items != total_items || total_items<1){
+      printf("\n pls enter a positive non decimal items value \n");
+      exit(1);
+  }
+  
+    // This will initialize the full semaphore with 0.
+    int sem_full_resp = sem_init(&full_semaphore,0,0);
+    if (sem_full_resp != 0){
+        printf("Unable to initialize full semaphore");
+        exit(0);
+    }
+    // This will initialize the empty semaphore with number of slots given by user.
+    int sem_empty_resp = sem_init(&empty_semaphore,0,number_of_slots);
+    if (sem_empty_resp != 0){
+        printf("Unable to initialize full semaphore");
+        exit(0);
+    }
+    
+    // creating threads for producer and consumer with their respective methods
+    pthread_create(&producer_thread,NULL,producer_method,NULL);
+    pthread_create(&consumer_thread,NULL,consumer_method,NULL);
+    pthread_join(producer_thread,NULL);
+    pthread_join(consumer_thread,NULL);
+
+     
+    printf(" Producer and consumer threads processed entire data");
+} 
